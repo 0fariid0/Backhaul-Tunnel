@@ -4,6 +4,6 @@
 ## Install & Upgrade
 
 ```
-bash <(curl -Ls https://raw.githubusercontent.com/dev-ir/Backhaul-Tunnel/master/main.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/0fariid0/Backhaul-Tunnel/master/main.sh)
 ```
 
