@@ -61,7 +61,7 @@ DVHOST_CLOUD_menu(){
 
 DVHOST_CLOUD_MAIN(){
     clear
-    DVHOST_CLOUD_menu "| 1  - Install Backhaul Core \n| 2  - Setup Tunnel \n| 3  - Uninstall \n| 0  - Exit"
+    DVHOST_CLOUD_menu "| 1  - Install Backhaul Core \n| 2  - Setup Tunnel \n| 3  - Uninstall \n| 4  - Remove Completely \n| 0  - Exit"
     read -p "Enter your choice: " choice
     
     case $choice in
@@ -75,6 +75,9 @@ DVHOST_CLOUD_MAIN(){
             rm -rf backhaul config.toml /etc/systemd/system/backhaul.service
             systemctl daemon-reload
             echo -e "${GREEN}Uninstallation successful.${NC}"
+        ;;
+        4)
+            DVHOST_CLOUD_REMOVE_COMPLETELY
         ;;
         0)
             echo -e "${GREEN}Exiting program...${NC}"
@@ -183,6 +186,15 @@ create_backhaul_service() {
     systemctl start backhaul.service
 
     echo -e "${GREEN}backhaul.service created and started.${NC}"
+}
+
+DVHOST_CLOUD_REMOVE_COMPLETELY() {
+    echo "Removing backhaul, configuration, and all related files..."
+    systemctl stop backhaul.service
+    systemctl disable backhaul.service
+    rm -rf /usr/bin/backhaul /root/config.toml /etc/systemd/system/backhaul.service
+    systemctl daemon-reload
+    echo -e "${GREEN}All files and services related to Backhaul have been completely removed.${NC}"
 }
 
 DVHOST_CLOUD_require_command
