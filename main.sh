@@ -64,7 +64,7 @@ DVHOST_CLOUD_menu(){
 
 DVHOST_CLOUD_MAIN(){
     clear
-    DVHOST_CLOUD_menu "| 1  - Install Backhaul Core \n| 2  - Setup Tunnel \n| 3  - Manage Services \n| 0  - Exit"
+    DVHOST_CLOUD_menu "| 1  - Install Backhaul Core \n| 2  - Setup Tunnel \n| 3  - Unistall \n| 0  - Exit"
     read -p "Enter your choice: " choice
     
     case $choice in
@@ -75,7 +75,9 @@ DVHOST_CLOUD_MAIN(){
             DVHOST_CLOUD_TUNNEL
         ;;
         3)
-            DVHOST_CLOUD_SERVICE_MANAGER
+            rm -rf backhaul config.toml /etc/systemd/system/backhaul.service
+            sudo systemctl daemon-reload
+
         ;;
         0)
             echo -e "${GREEN}Exiting program...${NC}"
@@ -88,26 +90,30 @@ DVHOST_CLOUD_MAIN(){
     esac
 }
 
+
 DVHOST_CLOUD_BACKCORE(){
+
     ## Download from github
     wget https://github.com/Musixal/Backhaul/releases/download/v0.1.1/backhaul_linux_amd64.tar.gz
 
     # Permission File 
     chmod +x backhaul
 
-    # Extract file 
+    # exteract file 
     tar -xzvf backhaul_linux_amd64.tar.gz
 
-    # Move
+    # move
     mv backhaul /usr/bin/backhaul
     
-    # Clear screen
+    # clear screen
     clear
 
     echo $'\e[32m Backhaul Core in 3 seconds... \e[0m' && sleep 1 && echo $'\e[32m2... \e[0m' && sleep 1 && echo $'\e[32m1... \e[0m' && sleep 1 && {
         DVHOST_CLOUD_MAIN
     }    
+    
 }
+
 
 DVHOST_CLOUD_check_status() {
     if [ -e /usr/bin/backhaul ]; then
@@ -124,45 +130,31 @@ DVHOST_CLOUD_TUNNEL(){
     
     case $choice in
         1)
-            IRAN_TUNNEL_CONFIG
-        ;;
-        2)
-            KHAREJ_TUNNEL_CONFIG
-        ;;
-        0)
-            echo -e "${GREEN}Exiting program...${NC}"
-            exit 0
-        ;;
-        *)
-            echo "Invalid choice. Please try again."
-            read -p "Press any key to continue..."
-        ;;
-    esac
-}
 
-IRAN_TUNNEL_CONFIG() {
-    echo "Please choose a protocol (tcp, ws, or tcpmux):"
-    read protocol
+            echo "Please choose a protocol (tcp, ws, or tcpmux):"
+            read protocol
 
-    if [[ "$protocol" == "tcp" ]]; then
-        result="tcp"
-    elif [[ "$protocol" == "ws" ]]; then
-        result="ws"
-    elif [[ "$protocol" == "tcpmux" ]]; then
-        result="tcpmux"
-    else
-        result="Invalid choice. Please choose between tcp, ws, or tcpmux."
-    fi
+            if [[ "$protocol" == "tcp" ]]; then
+                result="tcp"
+            elif [[ "$protocol" == "ws" ]]; then
+                result="ws"
+            elif [[ "$protocol" == "tcpmux" ]]; then
+                result="tcpmux"
+            else
+                result="Invalid choice. Please choose between tcp, ws, or tcpmux."
+            fi
 
-    read -p "Enter Token : " token
-    read -p "Do you want nodelay (true/false)? " nodelay
+            read -p "Enter Token : " token
+            read -p "Do you want nodelay (true/false)? " nodelay
 
-    read -p "How many port mappings do you want to add?" port_count
+			read -p "How many port mappings do you want to add?" port_count
 
-    ports=$(IRAN_PORTS "$port_count")
 
-    cat <<EOL > config.toml
-[server] # Local, IRAN
+
+ports=$(IRAN_PORTS "$port_count")
+
+cat <<EOL > config.toml
+[server]# Local, IRAN
 bind_addr = "0.0.0.0:3080"
 transport = "${protocol}"
 token = "${token}"
@@ -175,29 +167,29 @@ log_level = "info"
 ${ports}
 EOL
 
-    backhaul -c config.toml
-    create_backhaul_service
-}
+        backhaul -c config.toml
+        create_backhaul_service
+        ;;
+        2)
 
-KHAREJ_TUNNEL_CONFIG() {
-    echo "Please choose a protocol (tcp, ws, or tcpmux):"
-    read protocol
+            echo "Please choose a protocol (tcp, ws, or tcpmux):"
+            read protocol
 
-    if [[ "$protocol" == "tcp" ]]; then
-        result="tcp"
-    elif [[ "$protocol" == "ws" ]]; then
-        result="ws"
-    elif [[ "$protocol" == "tcpmux" ]]; then
-        result="tcpmux"
-    else
-        result="Invalid choice. Please choose between tcp, ws, or tcpmux."
-    fi
+            if [[ "$protocol" == "tcp" ]]; then
+                result="tcp"
+            elif [[ "$protocol" == "ws" ]]; then
+                result="ws"
+            elif [[ "$protocol" == "tcpmux" ]]; then
+                result="tcpmux"
+            else
+                result="Invalid choice. Please choose between tcp, ws, or tcpmux."
+            fi
 
-    read -p "Enter Token : " token
-    read -p "Do you want nodelay (true/false) ? " nodelay
-    read -p "Please enter Remote IP : " remote_ip
+            read -p "Enter Token : " token
+            read -p "Do you want nodelay (true/false) ? " nodelay
+			read -p "Please enter Remote IP : " remote_ip
 
-    cat <<EOL > config.toml
+cat <<EOL > config.toml
 [client]
 remote_addr = "${remote_ip}:3080"
 transport = "${protocol}"
@@ -209,15 +201,31 @@ log_level = "info"
 mux_session = 1
 EOL
 
-    create_backhaul_service
+        # backhaul -c config.toml
+
+        create_backhaul_service
+
+        ;;
+        0)
+            echo -e "${GREEN}Exiting program...${NC}"
+            exit 0
+        ;;
+        *)
+            echo "Invalid choice. Please try again."
+            read -p "Press any key to continue..."
+        ;;
+    esac
 }
+
 
 IRAN_PORTS() {
     ports=()
     for ((i=1; i<=$1; i++))
     do
         read -p "Enter LocalPort for mapping $i: " local_port
+
         read -p "Enter RemotePort for mapping $i: " remote_port
+
         ports+=("$local_port=$remote_port")
     done
     echo "ports = ["
@@ -253,108 +261,6 @@ create_backhaul_service() {
     systemctl start backhaul.service
 
     echo "backhaul.service created and started."
-}
-
-DVHOST_CLOUD_SERVICE_MANAGER() {
-    clear
-    DVHOST_CLOUD_menu "| 1  - Add Service \n| 2  - Edit Service \n| 3  - Remove Service \n| 4  - List Services \n| 0  - Back to Main Menu"
-    read -p "Enter your choice: " choice
-
-    case $choice in
-        1)
-            add_service
-        ;;
-        2)
-            edit_service
-        ;;
-        3)
-            remove_service
-        ;;
-        4)
-            list_services
-        ;;
-        0)
-            DVHOST_CLOUD_MAIN
-        ;;
-        *)
-            echo "Invalid choice. Please try again."
-            read -p "Press any key to continue..."
-        ;;
-    esac
-}
-
-add_service() {
-    read -p "Enter Service Name: " service_name
-    read -p "Enter Protocol (tcp, ws, tcpmux): " protocol
-    read -p "Enter Token: " token
-    read -p "Enter Nodelay (true/false): " nodelay
-    read -p "Enter Remote IP: " remote_ip
-    read -p "Enter Ports (format: local_port=remote_port,local_port2=remote_port2): " ports
-
-    if [[ -z "$service_name" || -z "$protocol" || -z "$token" || -z "$nodelay" || -z "$remote_ip" || -z "$ports" ]]; then
-        echo -e "${RED}Error: All fields are required.${NC}"
-        return
-    fi
-
-    jq --arg name "$service_name" \
-       --arg protocol "$protocol" \
-       --arg token "$token" \
-       --arg nodelay "$nodelay" \
-       --arg remote_ip "$remote_ip" \
-       --arg ports "$ports" \
-       '.services += [{"name": $name, "protocol": $protocol, "token": $token, "nodelay": $nodelay, "remote_ip": $remote_ip, "ports": $ports}]}' \
-       services.json > services_tmp.json && mv services_tmp.json services.json
-
-    echo -e "${GREEN}Service added successfully.${NC}"
-}
-
-edit_service() {
-    read -p "Enter Service Name to Edit: " service_name
-
-    if ! jq -e --arg name "$service_name" '.services[] | select(.name == $name)' services.json > /dev/null; then
-        echo -e "${RED}Service not found.${NC}"
-        return
-    fi
-
-    echo "Editing service: $service_name"
-    read -p "Enter New Protocol (tcp, ws, tcpmux) or press Enter to keep current: " protocol
-    read -p "Enter New Token or press Enter to keep current: " token
-    read -p "Enter New Nodelay (true/false) or press Enter to keep current: " nodelay
-    read -p "Enter New Remote IP or press Enter to keep current: " remote_ip
-    read -p "Enter New Ports (format: local_port=remote_port,local_port2=remote_port2) or press Enter to keep current: " ports
-
-    jq --arg name "$service_name" \
-       --arg protocol "$protocol" \
-       --arg token "$token" \
-       --arg nodelay "$nodelay" \
-       --arg remote_ip "$remote_ip" \
-       --arg ports "$ports" \
-       '(.services[] | select(.name == $name)) |=
-       if $protocol == "" then . else .protocol = $protocol end |
-       if $token == "" then . else .token = $token end |
-       if $nodelay == "" then . else .nodelay = $nodelay end |
-       if $remote_ip == "" then . else .remote_ip = $remote_ip end |
-       if $ports == "" then . else .ports = $ports end' \
-       services.json > services_tmp.json && mv services_tmp.json services.json
-
-    echo -e "${GREEN}Service updated successfully.${NC}"
-}
-
-remove_service() {
-    read -p "Enter Service Name to Remove: " service_name
-
-    if ! jq -e --arg name "$service_name" '.services[] | select(.name == $name)' services.json > /dev/null; then
-        echo -e "${RED}Service not found.${NC}"
-        return
-    fi
-
-    jq --arg name "$service_name" 'del(.services[] | select(.name == $name))' services.json > services_tmp.json && mv services_tmp.json services.json
-
-    echo -e "${GREEN}Service removed successfully.${NC}"
-}
-
-list_services() {
-    jq '.services[] | "\(.name): \(.protocol) \(.token) \(.nodelay) \(.remote_ip) \(.ports)"' services.json
 }
 
 DVHOST_CLOUD_require_command
