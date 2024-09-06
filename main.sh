@@ -5,6 +5,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
+# Check if user is root
 [[ $EUID -ne 0 ]] && echo -e "${RED}Fatal error: ${NC} Please run this script as root\n" && exit 1
 
 DVHOST_CLOUD_install_jq() {
@@ -22,7 +23,7 @@ DVHOST_CLOUD_install_jq() {
     fi
 }
 
-DVHOST_CLOUD_require_command(){
+DVHOST_CLOUD_require_command() {
     DVHOST_CLOUD_install_jq
     if ! command -v pv &> /dev/null; then
         echo "pv not found, installing it..."
@@ -31,7 +32,7 @@ DVHOST_CLOUD_require_command(){
     fi
 }
 
-DVHOST_CLOUD_menu(){
+DVHOST_CLOUD_menu() {
     clear
     SERVER_IP=$(hostname -I | awk '{print $1}')
     SERVER_COUNTRY=$(curl -sS "http://ip-api.com/json/$SERVER_IP" | jq -r '.country')
@@ -59,7 +60,7 @@ DVHOST_CLOUD_menu(){
     echo -e "\033[0m"
 }
 
-DVHOST_CLOUD_MAIN(){
+DVHOST_CLOUD_MAIN() {
     clear
     DVHOST_CLOUD_menu "| 1  - Install Backhaul Core \n| 2  - Setup Tunnel \n| 3  - Uninstall \n| 4  - Remove Completely \n| 0  - Exit"
     read -p "Enter your choice: " choice
@@ -91,7 +92,7 @@ DVHOST_CLOUD_MAIN(){
     esac
 }
 
-DVHOST_CLOUD_BACKCORE(){
+DVHOST_CLOUD_BACKCORE() {
     wget https://github.com/Musixal/Backhaul/releases/download/v0.1.1/backhaul_linux_amd64.tar.gz
     chmod +x backhaul
     tar -xzvf backhaul_linux_amd64.tar.gz
@@ -110,13 +111,13 @@ DVHOST_CLOUD_check_status() {
     fi
 }
 
-DVHOST_CLOUD_TUNNEL(){
+DVHOST_CLOUD_TUNNEL() {
     clear
-    DVHOST_CLOUD_menu "| 1  - IRAN \n| 2  - OUTSIDE \n| 0  - Exit"
+    DVHOST_CLOUD_menu "| 1  - IRAN (Source Server) \n| 2  - OUTSIDE (Destination Server) \n| 0  - Exit"
     read -p "Enter your choice: " choice
     
     case $choice in
-        1 | 2)
+        1)  # Source Server Configuration
             echo "Please choose a protocol (tcp, ws, or tcpmux):"
             read protocol
 
@@ -130,14 +131,44 @@ DVHOST_CLOUD_TUNNEL(){
 
             read -p "Enter Token: " token
             read -p "Do you want nodelay? (true/false): " nodelay
-            read -p "How many destinations do you want to configure? " destination_count
+            read -p "How many port mappings do you want to add? " port_count
 
-            for ((i=1; i<=$destination_count; i++))
-            do
-                read -p "Enter IP for destination $i: " remote_ip
+            ports=$(IRAN_PORTS "$port_count")
 
-                cat <<EOL >> config.toml
-[client_$i]
+            cat <<EOL > config.toml
+[server]
+bind_addr = "0.0.0.0:3080"
+transport = "${protocol}"
+token = "${token}"
+nodelay = ${nodelay}
+keepalive_period = 20
+channel_size = 2048
+connection_pool = 16
+mux_session = 1
+log_level = "info"
+${ports}
+EOL
+
+            create_backhaul_service
+        ;;
+        2)  # Destination Server Configuration
+            echo "Please choose a protocol (tcp, ws, or tcpmux):"
+            read protocol
+
+            if [[ "$protocol" == "tcp" ]] || [[ "$protocol" == "ws" ]] || [[ "$protocol" == "tcpmux" ]]; then
+                result=$protocol
+            else
+                echo "Invalid choice. Please choose between tcp, ws, or tcpmux."
+                read -p "Press any key to continue..."
+                DVHOST_CLOUD_TUNNEL
+            fi
+
+            read -p "Enter Token: " token
+            read -p "Do you want nodelay? (true/false): " nodelay
+            read -p "Please enter Remote IP (Source Server IP): " remote_ip
+
+            cat <<EOL > config.toml
+[client]
 remote_addr = "${remote_ip}:3080"
 transport = "${protocol}"
 token = "${token}"
@@ -146,9 +177,7 @@ keepalive_period = 20
 retry_interval = 1
 log_level = "info"
 mux_session = 1
-
 EOL
-            done
 
             create_backhaul_service
         ;;
@@ -164,38 +193,41 @@ EOL
     esac
 }
 
-create_backhaul_service() {
-    service_file="/etc/systemd/system/backhaul.service"
+IRAN_PORTS() {
+    ports=()
+    for ((i=1; i<=$1; i++)); do
+        read -p "Enter source port for port mapping $i: " src_port
+        read -p "Enter destination port for port mapping $i: " dst_port
+        ports+=("[port_mapping]\nsource_port = $src_port\ndestination_port = $dst_port\n")
+    done
+    echo "${ports[@]}"
+}
 
-    echo "[Unit]" > "$service_file"
-    echo "Description=Backhaul Reverse Tunnel Service" >> "$service_file"
-    echo "After=network.target" >> "$service_file"
-    echo "" >> "$service_file"
-    echo "[Service]" >> "$service_file"
-    echo "Type=simple" >> "$service_file"
-    echo "ExecStart=/usr/bin/backhaul -c /root/config.toml" >> "$service_file"
-    echo "Restart=always" >> "$service_file"
-    echo "RestartSec=3" >> "$service_file"
-    echo "LimitNOFILE=1048576" >> "$service_file"
-    echo "" >> "$service_file"
-    echo "[Install]" >> "$service_file"
-    echo "WantedBy=multi-user.target" >> "$service_file"
+create_backhaul_service() {
+    cat <<EOL > /etc/systemd/system/backhaul.service
+[Unit]
+Description=Backhaul Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/backhaul -c /root/config.toml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOL
 
     systemctl daemon-reload
-    systemctl enable backhaul.service
-    systemctl start backhaul.service
-
-    echo -e "${GREEN}backhaul.service created and started.${NC}"
+    systemctl enable backhaul
+    systemctl restart backhaul
+    echo -e "${GREEN}Backhaul service started successfully.${NC}"
 }
 
 DVHOST_CLOUD_REMOVE_COMPLETELY() {
-    echo "Removing backhaul, configuration, and all related files..."
-    systemctl stop backhaul.service
-    systemctl disable backhaul.service
-    rm -rf /usr/bin/backhaul /root/config.toml /etc/systemd/system/backhaul.service
+    rm -rf backhaul config.toml /usr/bin/backhaul /etc/systemd/system/backhaul.service
     systemctl daemon-reload
-    echo -e "${GREEN}All files and services related to Backhaul have been completely removed.${NC}"
+    echo -e "${GREEN}Complete removal successful.${NC}"
 }
 
-DVHOST_CLOUD_require_command
 DVHOST_CLOUD_MAIN
