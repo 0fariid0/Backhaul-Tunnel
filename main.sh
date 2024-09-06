@@ -1,38 +1,41 @@
 #!/bin/bash
 
+# رنگ‌ها برای خروجی
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-plain='\033[0m'
-NC='\033[0m' # No Color
+NC='\033[0m' # بدون رنگ
 
-# check root
-[[ $EUID -ne 0 ]] && echo -e "${RED}Fatal error: ${plain} Please run this script with root privilege \n " && exit 1
+# بررسی دسترسی root
+[[ $EUID -ne 0 ]] && echo -e "${RED}Fatal error: ${NC} لطفا این اسکریپت را با دسترسی root اجرا کنید \n" && exit 1
 
+# نصب jq در صورت نیاز
 DVHOST_CLOUD_install_jq() {
     if ! command -v jq &> /dev/null; then
         if command -v apt-get &> /dev/null; then
-            echo -e "${RED}jq is not installed. Installing...${NC}"
+            echo -e "${RED}jq نصب نشده است. در حال نصب...${NC}"
             sleep 1
-            sudo apt-get update
-            sudo apt-get install -y jq
+            apt-get update
+            apt-get install -y jq
         else
-            echo -e "${RED}Error: Unsupported package manager. Please install jq manually.${NC}\n"
-            read -p "Press any key to continue..."
+            echo -e "${RED}خطا: مدیر بسته پشتیبانی نمی‌شود. لطفا jq را دستی نصب کنید.${NC}\n"
+            read -p "برای ادامه کلیدی فشار دهید..."
             exit 1
         fi
     fi
 }
 
+# نصب pv در صورت نیاز
 DVHOST_CLOUD_require_command(){
     DVHOST_CLOUD_install_jq
     if ! command -v pv &> /dev/null; then
-        echo "pv could not be found, installing it..."
-        sudo apt update
-        sudo apt install -y pv
+        echo "pv یافت نشد، در حال نصب..."
+        apt update
+        apt install -y pv
     fi
 }
 
+# منوی اصلی
 DVHOST_CLOUD_menu(){
     clear
     SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -49,22 +52,23 @@ DVHOST_CLOUD_menu(){
     echo "| ######   ##   ##    ####   ### ###   ##  ##  ##   ##   #####   #######    ####    #####   ##   ##  ##   ##  #######  ####### ( 0.4 ) |"
     echo "+--------------------------------------------------------------------------------------------------------------------------------------+"                                                                                                
     echo "+--------------------------------------------------------------------------------------------------------------------------------------+"                                                                                                
-    echo -e "|${GREEN}Server Country    |${NC} $SERVER_COUNTRY"
-    echo -e "|${GREEN}Server IP         |${NC} $SERVER_IP"
-    echo -e "|${GREEN}Server ISP        |${NC} $SERVER_ISP"
-    echo -e "|${GREEN}Backhaul          |${NC} $BACK_CORE"
+    echo -e "|${GREEN}کشور سرور        |${NC} $SERVER_COUNTRY"
+    echo -e "|${GREEN}آی‌پی سرور       |${NC} $SERVER_IP"
+    echo -e "|${GREEN}ISP سرور        |${NC} $SERVER_ISP"
+    echo -e "|${GREEN}Core Backhaul    |${NC} $BACK_CORE"
     echo "+--------------------------------------------------------------------------------------------------------------------------------------+"                                                                                                
-    echo -e "|${YELLOW}Please choose an option:${NC}"
+    echo -e "|${YELLOW}لطفا یک گزینه را انتخاب کنید:${NC}"
     echo "+--------------------------------------------------------------------------------------------------------------------------------------+"                                                                                                
     echo -e $1
     echo "+--------------------------------------------------------------------------------------------------------------------------------------+"                                                                                                
     echo -e "\033[0m"
 }
 
+# برنامه اصلی
 DVHOST_CLOUD_MAIN(){
     clear
-    DVHOST_CLOUD_menu "| 1  - Install Backhaul Core \n| 2  - Setup Tunnel \n| 3  - Unistall \n| 0  - Exit"
-    read -p "Enter your choice: " choice
+    DVHOST_CLOUD_menu "| 1  - نصب Backhaul Core \n| 2  - تنظیم تونل \n| 3  - حذف \n| 0  - خروج"
+    read -p "لطفا گزینه خود را وارد کنید: " choice
     
     case $choice in
         1)
@@ -75,121 +79,84 @@ DVHOST_CLOUD_MAIN(){
         ;;
         3)
             rm -rf backhaul config.toml /etc/systemd/system/backhaul.service
-            sudo systemctl daemon-reload
-
+            systemctl daemon-reload
+            echo -e "${GREEN}حذف موفقیت‌آمیز بود.${NC}"
         ;;
         0)
-            echo -e "${GREEN}Exiting program...${NC}"
+            echo -e "${GREEN}خروج از برنامه...${NC}"
             exit 0
         ;;
         *)
-            echo "Invalid choice. Please try again."
-            read -p "Press any key to continue..."
+            echo "انتخاب نامعتبر. لطفا دوباره امتحان کنید."
+            read -p "برای ادامه کلیدی فشار دهید..."
+            DVHOST_CLOUD_MAIN
         ;;
     esac
 }
 
-
+# نصب و دانلود هسته Backhaul
 DVHOST_CLOUD_BACKCORE(){
-
-    ## Download from github
+    ## دانلود از گیت‌هاب
     wget https://github.com/Musixal/Backhaul/releases/download/v0.1.1/backhaul_linux_amd64.tar.gz
 
-    # Permission File 
+    # تنظیم دسترسی فایل
     chmod +x backhaul
 
-    # exteract file 
+    # استخراج فایل
     tar -xzvf backhaul_linux_amd64.tar.gz
 
-    # move
+    # جابجایی فایل
     mv backhaul /usr/bin/backhaul
     
-    # clear screen
+    # پاک کردن صفحه
     clear
 
-    echo $'\e[32m Backhaul Core in 3 seconds... \e[0m' && sleep 1 && echo $'\e[32m2... \e[0m' && sleep 1 && echo $'\e[32m1... \e[0m' && sleep 1 && {
+    echo $'\e[32m شروع Backhaul Core در 3 ثانیه... \e[0m' && sleep 1 && echo $'\e[32m2... \e[0m' && sleep 1 && echo $'\e[32m1... \e[0m' && sleep 1 && {
         DVHOST_CLOUD_MAIN
-    }    
-    
+    }
 }
 
-
+# بررسی وضعیت نصب
 DVHOST_CLOUD_check_status() {
     if [ -e /usr/bin/backhaul ]; then
-        echo -e ${GREEN}"installed"${NC}
+        echo -e ${GREEN}"نصب شده"${NC}
     else
-        echo -e ${RED}"Not installed"${NC}
+        echo -e ${RED}"نصب نشده"${NC}
     fi
 }
 
+# تنظیم تونل
 DVHOST_CLOUD_TUNNEL(){
     clear
-    DVHOST_CLOUD_menu "| 1  - IRAN \n| 2  - KHAREJ  \n| 0  - Exit"
-    read -p "Enter your choice: " choice
+    DVHOST_CLOUD_menu "| 1  - ایران \n| 2  - خارج  \n| 0  - خروج"
+    read -p "لطفا گزینه خود را انتخاب کنید: " choice
     
     case $choice in
-        1)
-
-            echo "Please choose a protocol (tcp, ws, or tcpmux):"
+        1 | 2)
+            echo "لطفا پروتکل را انتخاب کنید (tcp, ws, یا tcpmux):"
             read protocol
 
-            if [[ "$protocol" == "tcp" ]]; then
-                result="tcp"
-            elif [[ "$protocol" == "ws" ]]; then
-                result="ws"
-            elif [[ "$protocol" == "tcpmux" ]]; then
-                result="tcpmux"
+            if [[ "$protocol" == "tcp" ]] || [[ "$protocol" == "ws" ]] || [[ "$protocol" == "tcpmux" ]]; then
+                result=$protocol
             else
-                result="Invalid choice. Please choose between tcp, ws, or tcpmux."
+                echo "انتخاب نامعتبر. لطفا بین tcp, ws, یا tcpmux انتخاب کنید."
+                read -p "برای ادامه کلیدی فشار دهید..."
+                DVHOST_CLOUD_TUNNEL
             fi
 
-            read -p "Enter Token : " token
-            read -p "Do you want nodelay (true/false)? " nodelay
+            read -p "لطفا توکن را وارد کنید: " token
+            read -p "آیا nodelay می‌خواهید؟ (true/false): " nodelay
 
-			read -p "How many port mappings do you want to add?" port_count
+            # دریافت تعداد سرورهای مقصد
+            read -p "چند مقصد می‌خواهید تنظیم کنید؟ " destination_count
 
+            # ساخت تنظیمات برای هر سرور مقصد
+            for ((i=1; i<=$destination_count; i++))
+            do
+                read -p "لطفا IP مقصد $i را وارد کنید: " remote_ip
 
-
-ports=$(IRAN_PORTS "$port_count")
-
-cat <<EOL > config.toml
-[server]# Local, IRAN
-bind_addr = "0.0.0.0:3080"
-transport = "${protocol}"
-token = "${token}"
-nodelay = ${nodelay}
-keepalive_period = 20
-channel_size = 2048
-connection_pool = 16
-mux_session = 1
-log_level = "info"
-${ports}
-EOL
-
-        backhaul -c config.toml
-        create_backhaul_service
-        ;;
-        2)
-
-            echo "Please choose a protocol (tcp, ws, or tcpmux):"
-            read protocol
-
-            if [[ "$protocol" == "tcp" ]]; then
-                result="tcp"
-            elif [[ "$protocol" == "ws" ]]; then
-                result="ws"
-            elif [[ "$protocol" == "tcpmux" ]]; then
-                result="tcpmux"
-            else
-                result="Invalid choice. Please choose between tcp, ws, or tcpmux."
-            fi
-
-            read -p "Enter Token : " token
-            read -p "Do you want nodelay (true/false) ? " nodelay
-			read -p "Please enter Remote IP : " remote_ip
-
-cat <<EOL > config.toml
-[client]
+                cat <<EOL >> config.toml
+[client_$i]
 remote_addr = "${remote_ip}:3080"
 transport = "${protocol}"
 token = "${token}"
@@ -198,43 +165,26 @@ keepalive_period = 20
 retry_interval = 1
 log_level = "info"
 mux_session = 1
+
 EOL
+            done
 
-        # backhaul -c config.toml
-
-        create_backhaul_service
-
+            # اجرای سرویس
+            create_backhaul_service
         ;;
         0)
-            echo -e "${GREEN}Exiting program...${NC}"
+            echo -e "${GREEN}خروج از برنامه...${NC}"
             exit 0
         ;;
         *)
-            echo "Invalid choice. Please try again."
-            read -p "Press any key to continue..."
+            echo "انتخاب نامعتبر. لطفا دوباره امتحان کنید."
+            read -p "برای ادامه کلیدی فشار دهید..."
+            DVHOST_CLOUD_TUNNEL
         ;;
     esac
 }
 
-
-IRAN_PORTS() {
-    ports=()
-    for ((i=1; i<=$1; i++))
-    do
-        read -p "Enter LocalPort for mapping $i: " local_port
-
-        read -p "Enter RemotePort for mapping $i: " remote_port
-
-        ports+=("$local_port=$remote_port")
-    done
-    echo "ports = ["
-    for port in "${ports[@]}"
-    do
-        echo "   \"$port\","
-    done
-    echo "]"
-}
-
+# ایجاد سرویس backhaul
 create_backhaul_service() {
     service_file="/etc/systemd/system/backhaul.service"
 
@@ -244,7 +194,7 @@ create_backhaul_service() {
     echo "" >> "$service_file"
     echo "[Service]" >> "$service_file"
     echo "Type=simple" >> "$service_file"
-    echo "ExecStart=/root/backhaul -c /root/config.toml" >> "$service_file"
+    echo "ExecStart=/usr/bin/backhaul -c /root/config.toml" >> "$service_file"
     echo "Restart=always" >> "$service_file"
     echo "RestartSec=3" >> "$service_file"
     echo "LimitNOFILE=1048576" >> "$service_file"
@@ -252,15 +202,18 @@ create_backhaul_service() {
     echo "[Install]" >> "$service_file"
     echo "WantedBy=multi-user.target" >> "$service_file"
 
-    # Reload systemd daemon to recognize new service
+    # بارگذاری مجدد دیمون systemd
     systemctl daemon-reload
 
-    # Optionally enable and start the service
+    # فعال و شروع سرویس
     systemctl enable backhaul.service
     systemctl start backhaul.service
 
-    echo "backhaul.service created and started."
+    echo -e "${GREEN}سرویس backhaul ایجاد و شروع شد.${NC}"
 }
 
-0fariid0_require_command
-0fariid0
+# اطمینان از نصب jq و pv
+DVHOST_CLOUD_require_command
+
+# شروع منوی اصلی
+DVHOST_CLOUD_MAIN
